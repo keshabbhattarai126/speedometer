@@ -8,29 +8,25 @@ import android.hardware.SensorManager
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.speedometerkeshab.data.AccelerometerRepository
-import com.example.speedometerkeshab.model.SpeedometerReading // <--- IMPORT NEW MODEL
+import com.example.speedometerkeshab.model.SpeedometerReading
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import kotlin.math.sqrt
 
 /**
  * Concrete implementation of the AccelerometerRepository interface.
- * Handles all interaction with the Android SensorManager and sends data to Firebase Realtime Database.
+ * Now updates a SINGLE fixed node in Firebase with the latest reading.
  */
 class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, SensorEventListener {
 
     // --- Firebase Setup ---
     private val database: FirebaseDatabase = FirebaseDatabase.getInstance()
 
-    // Using a structured path: e.g., "readings/session_timestamp"
-    private val readingsRef: DatabaseReference = database.getReference("speedometer_readings")
-    private val currentSessionRef: DatabaseReference // Reference for the current session data
-
-    init {
-        // Initialize the session reference uniquely upon creation
-        // (e.g., when the app starts or ViewModel is created)
-        currentSessionRef = readingsRef.child("session_${System.currentTimeMillis()}")
-    }
+    // Use a FIXED, non-timestamped path for the single live reading.
+    // This node will be overwritten every time we send data.
+    // Example: "live_speedometer_data/current_reading"
+    private val liveReadingRef: DatabaseReference =
+        database.getReference("live_speedometer_data").child("current_reading") // <--- FIXED REFERENCE
 
     // --- Sensor Setup ---
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -38,12 +34,12 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
     private var isSensorRegistered = false
 
     // --- Data Processing Constants ---
-    private val ALPHA = 0.8f          // Low-pass filter constant for gravity smoothing
-    private val SHAKE_THRESHOLD = 0.5f // m/s²: Movement below this is considered noise
-    private val SCALING_FACTOR = 10.0f // Factor to make m/s² look like km/h
+    private val ALPHA = 0.8f
+    private val SHAKE_THRESHOLD = 0.5f
+    private val SCALING_FACTOR = 10.0f
 
     // --- Firebase Throttling ---
-    // Only send data to Firebase every 500ms
+    // Only update the live node every 500ms to avoid overloading the database.
     private val UPLOAD_INTERVAL_MS = 500L
     private var lastUploadTime = 0L
 
@@ -59,7 +55,6 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
     override fun startListening() {
         if (accelerometer == null) return
 
-        // Reset state
         gravity = floatArrayOf(0f, 0f, 0f)
         lastUploadTime = System.currentTimeMillis()
 
@@ -77,6 +72,10 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
             isSensorRegistered = false
         }
         _currentSpeedMps.postValue(0f)
+
+        // OPTIONAL: Reset the Firebase value to 0 when measurement stops
+        // This is good practice to indicate the device is no longer sending data.
+        sendDataToFirebase(0f, isFinal = true)
     }
 
     // --- SensorEventListener Implementation ---
@@ -84,6 +83,7 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type != Sensor.TYPE_ACCELEROMETER) return
 
+        // ... (Acceleration calculation logic remains the same) ...
         val ax = event.values[0]
         val ay = event.values[1]
         val az = event.values[2]
@@ -118,29 +118,33 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
         sendDataToFirebase(finalDisplayValue)
     }
 
-    private fun sendDataToFirebase(scaledValue: Float) {
+    // New optional parameter 'isFinal' for cleanup actions
+    private fun sendDataToFirebase(scaledValue: Float, isFinal: Boolean = false) {
         val currentTime = System.currentTimeMillis()
 
-        // Throttling check: only proceed if the interval has passed
-        if (currentTime - lastUploadTime >= UPLOAD_INTERVAL_MS) {
+        // Throttling check OR if it's a final stop action
+        if (isFinal || currentTime - lastUploadTime >= UPLOAD_INTERVAL_MS) {
 
-            // 1. Create the data object using the model class
+            // 1. Create the data object
             val reading = SpeedometerReading(
                 timestamp = currentTime,
                 scaledSpeed = scaledValue
             )
 
-            // 2. Use push() to create a unique, sequential key under the current session.
-            currentSessionRef.push().setValue(reading)
+            // 2. Use setValue() directly on the FIXED reference.
+            // This overwrites the previous data at this exact location.
+            liveReadingRef.setValue(reading)
                 .addOnSuccessListener {
-                    // Data successfully saved
+                    // Success
                 }
                 .addOnFailureListener { e ->
-                    // Handle write failure (e.g., log error)
+                    // Handle failure
                 }
 
-            // 3. Update the last upload time
-            lastUploadTime = currentTime
+            // 3. Update the last upload time only if it wasn't a final call
+            if (!isFinal) {
+                lastUploadTime = currentTime
+            }
         }
     }
 
