@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.example.speedometerkeshab" />
+                  <option name="mobileSdkAppId" value="1:258355903146:android:aa4dcebd4552d2bfb86ed3" />
+                  <option name="projectId" value="accelerometer-b82c6" />
+                  <option name="projectNumber" value="258355903146" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
