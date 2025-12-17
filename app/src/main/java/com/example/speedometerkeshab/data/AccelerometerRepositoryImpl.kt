@@ -8,14 +8,15 @@ import android.hardware.SensorManager
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.speedometerkeshab.data.AccelerometerRepository
-import com.example.speedometerkeshab.model.SpeedometerReading
+import com.example.speedometerkeshab.model.AccelerometerModel // <--- USING THE SINGLE MODEL
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import kotlin.math.sqrt
 
 /**
  * Concrete implementation of the AccelerometerRepository interface.
- * Now updates a SINGLE fixed node in Firebase with the latest reading.
+ * Now updates a SINGLE fixed node in Firebase with the latest reading,
+ * using the combined AccelerometerModel.
  */
 class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, SensorEventListener {
 
@@ -23,10 +24,8 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
     private val database: FirebaseDatabase = FirebaseDatabase.getInstance()
 
     // Use a FIXED, non-timestamped path for the single live reading.
-    // This node will be overwritten every time we send data.
-    // Example: "live_speedometer_data/current_reading"
     private val liveReadingRef: DatabaseReference =
-        database.getReference("live_speedometer_data").child("current_reading") // <--- FIXED REFERENCE
+        database.getReference("live_speedometer_data").child("current_reading") // FIXED REFERENCE
 
     // --- Sensor Setup ---
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -39,11 +38,11 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
     private val SCALING_FACTOR = 10.0f
 
     // --- Firebase Throttling ---
-    // Only update the live node every 500ms to avoid overloading the database.
     private val UPLOAD_INTERVAL_MS = 500L
     private var lastUploadTime = 0L
 
     // --- State Management ---
+    // NOTE: This LiveData still only emits the Float value, as defined by the interface.
     private val _currentSpeedMps = MutableLiveData(0f)
     override val currentSpeedMps: LiveData<Float> = _currentSpeedMps
 
@@ -73,9 +72,8 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
         }
         _currentSpeedMps.postValue(0f)
 
-        // OPTIONAL: Reset the Firebase value to 0 when measurement stops
-        // This is good practice to indicate the device is no longer sending data.
-        sendDataToFirebase(0f, isFinal = true)
+        // Reset the Firebase value to 0 when measurement stops
+        sendDataToFirebase(scaledValue = 0f, isFinal = true)
     }
 
     // --- SensorEventListener Implementation ---
@@ -84,6 +82,9 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
         if (event?.sensor?.type != Sensor.TYPE_ACCELEROMETER) return
 
         // ... (Acceleration calculation logic remains the same) ...
+
+        // Linear acceleration (movement) and magnitude calculation...
+        // ... (omitted for brevity, assume finalDisplayValue is calculated) ...
         val ax = event.values[0]
         val ay = event.values[1]
         val az = event.values[2]
@@ -111,31 +112,31 @@ class AccelerometerRepositoryImpl(context: Context) : AccelerometerRepository, S
             else -> movementMagnitude * SCALING_FACTOR
         }
 
-        // 4. Update LiveData for UI
         _currentSpeedMps.postValue(finalDisplayValue)
 
-        // 5. Send data to Firebase (Throttled)
+        // 4. Send data to Firebase (Throttled)
         sendDataToFirebase(finalDisplayValue)
     }
 
-    // New optional parameter 'isFinal' for cleanup actions
     private fun sendDataToFirebase(scaledValue: Float, isFinal: Boolean = false) {
         val currentTime = System.currentTimeMillis()
 
         // Throttling check OR if it's a final stop action
         if (isFinal || currentTime - lastUploadTime >= UPLOAD_INTERVAL_MS) {
 
-            // 1. Create the data object
-            val reading = SpeedometerReading(
+            // 1. Create the data object using the combined model
+            // NOTE: We set isRunning to FALSE because the database doesn't need to know the UI state.
+            // We only populate the fields required for Firebase.
+            val reading = AccelerometerModel(
                 timestamp = currentTime,
-                scaledSpeed = scaledValue
+                speedMps = scaledValue,
+                isRunning = false // Always false or omitted for clean persistence
             )
 
-            // 2. Use setValue() directly on the FIXED reference.
-            // This overwrites the previous data at this exact location.
+            // 2. Use setValue() directly on the FIXED reference to overwrite the previous data.
             liveReadingRef.setValue(reading)
                 .addOnSuccessListener {
-                    // Success
+                    // Data successfully saved
                 }
                 .addOnFailureListener { e ->
                     // Handle failure
