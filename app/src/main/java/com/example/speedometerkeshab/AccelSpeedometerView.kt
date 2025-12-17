@@ -1,12 +1,15 @@
 package com.example.speedometerkeshab
 
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,6 +23,7 @@ fun AccelSpeedometerScreen(
 ) {
     // Collect the state from the ViewModel
     val state by viewModel.state
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -63,6 +67,15 @@ fun AccelSpeedometerScreen(
                     Text("Start Measurement")
                 }
             }
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // NAVIGATE USING INTENT
+        OutlinedButton(onClick = {
+            val intent = Intent(context, AccelRecieverView::class.java)
+            context.startActivity(intent)
+        }) {
+            Text("Go to Remote View")
         }
     }
 }

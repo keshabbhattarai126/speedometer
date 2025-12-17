@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">speedometerkeshab</string>
+    <string name="title_activity_accel_reciever_view">AccelRecieverView</string>
 </resources>
