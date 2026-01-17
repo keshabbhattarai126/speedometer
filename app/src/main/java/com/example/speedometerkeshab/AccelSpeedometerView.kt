@@ -2,11 +2,8 @@ package com.example.speedometerkeshab
 
 import android.content.Intent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -14,66 +11,48 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.accompanist.permissions.*
 
-
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun AccelSpeedometerScreen(
-    // Ensure the correct ViewModel is imported and used
-    viewModel: AccelerometerViewModel = viewModel()
-) {
-    // Collect the state from the ViewModel
+fun AccelSpeedometerScreen(viewModel: AccelerometerViewModel = viewModel()) {
     val state by viewModel.state
     val context = LocalContext.current
+    val permissionState = rememberPermissionState(android.Manifest.permission.ACCESS_FINE_LOCATION)
+
+    // Request permission on launch
+    LaunchedEffect(Unit) {
+        permissionState.launchPermissionRequest()
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Warning about accuracy
-        Text(
-            text = "This uses the accelerometer only - Value is Scaled Acceleration (m/s²)",
-            fontSize = 14.sp,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
+        if (permissionState.status.isGranted) {
+            Text("GPS Speedometer Active", color = MaterialTheme.colorScheme.primary)
 
-        // The digital display
-        Text(
-            // Display the scaled value
-            text = "${"%.1f".format(state.speedMps)}",
-            fontSize = 80.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            // Updated text to reflect it is not true speed
-            text = "SCALED KM/H",
-            fontSize = 20.sp,
-            modifier = Modifier.padding(bottom = 48.dp)
-        )
+            Text(
+                text = "${"%.1f".format(state.speedMps)}",
+                fontSize = 80.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(text = "KM/H", fontSize = 20.sp, modifier = Modifier.padding(bottom = 48.dp))
 
-        // Control Buttons
-        Row(
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (state.isRunning) {
-                Button(onClick = viewModel::stopMeasurement) {
-                    Text("Stop & Reset")
-                }
-            } else {
-                Button(onClick = viewModel::startMeasurement) {
-                    Text("Start Measurement")
-                }
+            Button(onClick = { if (state.isRunning) viewModel.stopMeasurement() else viewModel.startMeasurement() }) {
+                Text(if (state.isRunning) "Stop GPS" else "Start GPS")
+            }
+        } else {
+            Text("GPS Permission is required for speed accuracy.")
+            Button(onClick = { permissionState.launchPermissionRequest() }) {
+                Text("Grant Permission")
             }
         }
-        Spacer(modifier = Modifier.height(32.dp))
 
-        // NAVIGATE USING INTENT
+        Spacer(modifier = Modifier.height(32.dp))
         OutlinedButton(onClick = {
-            val intent = Intent(context, AccelRecieverView::class.java)
-            context.startActivity(intent)
+            context.startActivity(Intent(context, AccelRecieverView::class.java))
         }) {
             Text("Go to Remote View")
         }

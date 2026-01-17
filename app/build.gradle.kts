@@ -61,4 +61,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.compose.runtime:runtime-livedata:1.7.6")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 }
